@@ -1,32 +1,40 @@
 import { useEffect, useRef, useState } from 'react'
-
 import ChatMessage from '@/components/ChatMessage'
+import { data } from '@/data'
 
 export default function ChatWindow() {
   const [userText, setUserText] = useState('')
   const [conversation, setConversation] = useState([
     {
-      text: 'Greetings, user!',
+      text: 'Greetings, user! Here are your options:',
       isUser: false
     },
     {
-      text: 'Type "/questions" to get list of 5 random questions available',
+      text: '1. Type "/questions" to get a list of 5 random questions.',
+      isUser: false
+    },
+    {
+      text: '2. After getting random questions, type a number (1-5) to get the answer to a specific question.',
+      isUser: false
+    },
+    {
+      text: '3. Or just ask me anything!',
       isUser: false
     }
   ])
 
+  const [randomQuestions, setRandomQuestions] = useState([])
   const containerRef = useRef(null);
 
   useEffect(() => {
-    // Scroll to the bottom when new text is added
     containerRef.current.scrollTop = containerRef.current.scrollHeight;
-  }, [userText, conversation]);
+  }, [conversation]);
 
-  const handleSendMessage = async e => {
+  const handleSendMessage = async (e) => {
     e.preventDefault()
 
     try {
-      const userMessage = userText
+      const userMessage = userText.trim()
       setUserText('')
 
       const updatedConversation = [
@@ -39,31 +47,80 @@ export default function ChatWindow() {
 
       setConversation(updatedConversation)
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ question: userMessage })
-      })
+      let response
 
-      const data = await response.json()
+      if (userMessage.toLowerCase() === '/questions') {
+        const newRandomQuestions = getRandomQuestions(5)
+        setRandomQuestions(newRandomQuestions)
+        response = {
+          answer: "Here are 5 random questions you can ask:\n\n" + newRandomQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n') + "\n\nPlease type a number (1-5) to get an answer to a specific question."
+        }
+      } else if (/^[1-5]$/.test(userMessage)) {
+        if (randomQuestions.length > 0) {
+          const questionIndex = parseInt(userMessage) - 1
+          const selectedQuestion = randomQuestions[questionIndex]
+          const answer = data.find(item => item.question === selectedQuestion)?.answer
+          response = {
+            answer: answer || "I'm sorry, I couldn't find an answer to that question."
+          }
+        } else {
+          response = {
+            answer: "I'm sorry, but you need to request random questions first by typing '/questions'. Then you can select a question by number."
+          }
+        }
+      } else {
+        // Check for common questions about the chatbot
+        const lowercaseMessage = userMessage.toLowerCase()
+        if (lowercaseMessage.includes('who are you') || lowercaseMessage.includes('what are you')) {
+          response = {
+            answer: "I'm a chatbot designed to answer questions and provide information. How can I assist you today?"
+          }
+        } else if (lowercaseMessage.includes('your name')) {
+          response = {
+            answer: "My name is ChatBot. It's nice to meet you!"
+          }
+        } else {
+          // If it's not a common question about the chatbot, use the data array
+          const matchingQuestion = data.find(item => 
+            item.question.toLowerCase().includes(lowercaseMessage) || 
+            lowercaseMessage.includes(item.question.toLowerCase())
+          )
+          
+          if (matchingQuestion) {
+            response = {
+              answer: matchingQuestion.answer
+            }
+          } else {
+            response = {
+              answer: "I'm sorry, I don't have an answer for that question. Is there something else I can help you with?"
+            }
+          }
+        }
+      }
 
-      // Update conversation with the API response
       const updatedConversationWithResponse = [
         ...updatedConversation,
         {
-          text: data.answer,
+          text: response.answer,
           isUser: false
         }
       ]
 
-      setTimeout(() => {
-        setConversation(updatedConversationWithResponse)
-      }, 500) // manually adding half second delay so it feels like loading...
+      setConversation(updatedConversationWithResponse)
     } catch (error) {
-      console.error('Error fetching answers:', error)
+      console.error('Error processing message:', error)
+      // Provide a friendly error message to the user
+      const errorResponse = {
+        text: "I'm sorry, I encountered an error while processing your request. Please try again later.",
+        isUser: false
+      }
+      setConversation([...updatedConversation, errorResponse])
     }
+  }
+
+  const getRandomQuestions = (count) => {
+    const shuffled = [...data].sort(() => 0.5 - Math.random())
+    return shuffled.slice(0, count).map(item => item.question)
   }
 
   return (
@@ -79,7 +136,16 @@ export default function ChatWindow() {
       </div>
       <div className='w-full h-14 p-2 flex flex-col justify-center'>
         <form onSubmit={handleSendMessage} className='flex items-center justify-between space-x-3'>
-          <input type='text' name='message' id='message' placeholder='Write your message' autoComplete='off' className='py-2 px-3 rounded-md flex-1 focus:ring-1 focus:ring-cyan-500 focus:outline-none' value={userText} onChange={e => setUserText(e.target.value)} />
+          <input
+            type='text'
+            name='message'
+            id='message'
+            placeholder='Write your message'
+            autoComplete='off'
+            className='py-2 px-3 rounded-md flex-1 focus:ring-1 focus:ring-cyan-500 focus:outline-none'
+            value={userText}
+            onChange={e => setUserText(e.target.value)}
+          />
           <button className='px-4 py-2 bg-cyan-500 rounded-md text-white' type='submit'>
             Send
           </button>

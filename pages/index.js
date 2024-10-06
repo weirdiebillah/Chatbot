@@ -1,4 +1,5 @@
 import ChatWindow from '@/components/ChatWindow'
+import { data } from '@/data'
 
 export default function Home() {
   return (
